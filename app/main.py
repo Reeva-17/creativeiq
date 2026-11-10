@@ -1,33 +1,56 @@
+
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
-from app.api.routes import brand, competitors
-from creative_generation.routes.creative_routes import router as creative_router
-from critic_optimizer.main import app as critic_app
+from app.api.routes import brand, competitors, campaign
 
-app = FastAPI(
-    title="CreativeIQ",
-    description="Unified AI-powered brand intelligence, creative generation and optimization platform",
-    version="1.0.0"
+from creative_generation.routes.creative_routes import (
+    router as creative_router
 )
 
-# Brand Intelligence
+from critic_optimizer.main import app as critic_app
+
+
+app = FastAPI(
+    title="CREATIVEIQ · Autonomous Marketing Multi-Agent System",
+    version="2.0.0",
+    description=(
+        "Unified AI-powered marketing platform combining "
+        "Brand Intelligence, Autonomous Creative Direction, "
+        "Creative Generation and Critic & Optimizer."
+    )
+)
+
+
+# PERSON 1 — BRAND INTELLIGENCE
 app.include_router(brand.router)
 app.include_router(competitors.router)
 
-# Creative Generation
+
+# PERSON 2 — AUTONOMOUS CREATIVE DIRECTOR
+app.include_router(campaign.router)
+
+
+# RASHI — CREATIVE GENERATION
 app.include_router(
     creative_router,
     prefix="/api/v1/creative",
     tags=["Creative Generation"]
 )
 
-# Critic & Optimizer
+
+# REEVA — CRITIC & OPTIMIZER
 app.mount("/api/v1/critic", critic_app)
 
-# Generated images
-GENERATED_DIR = Path(__file__).resolve().parent.parent / "creative_generation" / "generated"
+
+# GENERATED IMAGES AND POSTERS
+GENERATED_DIR = (
+    Path(__file__).resolve().parent.parent
+    / "creative_generation"
+    / "generated"
+)
+
 GENERATED_DIR.mkdir(parents=True, exist_ok=True)
 
 app.mount(
@@ -36,9 +59,15 @@ app.mount(
     name="generated"
 )
 
+
+# UNIFIED HEALTH CHECK
 @app.get("/health", tags=["System"])
 async def health():
     return {
         "status": "ok",
-        "service": "CreativeIQ"
+        "service": "CREATIVEIQ",
+        "person_1": "Brand Intelligence",
+        "person_2": "Autonomous Creative Director",
+        "person_3": "Creative Generation",
+        "person_4": "Critic & Optimizer"
     }
