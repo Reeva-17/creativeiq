@@ -1,0 +1,1 @@
+Use only supplied sources. For each claim retain its source URL. Mark unavailable information rather than inferring it.
