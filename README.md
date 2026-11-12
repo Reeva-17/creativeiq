@@ -63,8 +63,8 @@ Complete Agent Workflow :-
 Tech Stack :- 
 Python, Groq API, Langraph, FastAPI, Pydantic, Tavily API, Gemini API, Cloudinary.
 
-Primary Development Language: Python
-Primary LLM Inference Provider: Groq
-Development Environment: VS Code
-Agent Orchestration: LangGraph
+Primary Development Language: Python, 
+Primary LLM Inference Provider: Groq, 
+Development Environment: VS Code,  
+Agent Orchestration: LangGraph, 
 Deployment Target: Render and Nonilion
