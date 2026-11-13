@@ -65,7 +65,7 @@ class LLMGateway:
         self.groq_api_key = groq_api_key or os.getenv("GROQ_API_KEY")
         self.groq_model = groq_model or os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
         self.gemini_api_key = gemini_api_key or os.getenv("GEMINI_API_KEY")
-        self.gemini_model = gemini_model or os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+        self.gemini_model = gemini_model or os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
         self.preferred_provider = preferred_provider
 
         # Initialize Groq Client if key exists

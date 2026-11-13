@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>CreativeIQ</title>
+  <style>
+    :root{font-family:Inter,system-ui,sans-serif;color:#17202a;background:#f5f7fb}body{margin:0}.wrap{max-width:1120px;margin:auto;padding:32px 20px}header{margin-bottom:24px}h1{margin:0;font-size:2.4rem}.sub{color:#52616b}textarea{width:100%;box-sizing:border-box;min-height:150px;padding:14px;border:1px solid #cbd5e1;border-radius:10px;font:inherit}.card{background:#fff;border-radius:12px;padding:22px;margin:18px 0;box-shadow:0 1px 4px #0001}button{background:#2e1065;color:#fff;border:0;border-radius:8px;padding:12px 18px;font-weight:700;cursor:pointer}button:disabled{opacity:.55}.status{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}.badge{padding:7px 10px;border-radius:20px;background:#ede9fe;color:#4c1d95}.error{color:#b91c1c;white-space:pre-wrap}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}.result{white-space:pre-wrap;max-height:420px;overflow:auto;background:#f8fafc;padding:12px;border-radius:8px}img{width:100%;border-radius:8px;border:1px solid #e2e8f0}.hidden{display:none}label{display:flex;gap:8px;align-items:center;margin:12px 0}
+  </style>
+</head>
+<body><main class="wrap">
+  <header><h1>CreativeIQ</h1><p class="sub">One prompt → brand intelligence → campaign direction → real creative/poster → critique and revision.</p></header>
+  <section class="card"><label for="prompt"><strong>Describe your brand and campaign goal</strong></label>
+    <textarea id="prompt">Create a complete marketing campaign for Glowify, a premium skincare brand targeting young adults. Promote its new vitamin C serum and focus on natural radiance.</textarea>
+    <label><input id="poster" type="checkbox" checked> Generate an image and final poster (requires Cloudflare Workers AI credentials)</label>
+    <button id="run">Generate complete campaign</button><p id="message" class="sub"></p><div id="progress" class="status"></div><p id="error" class="error"></p>
+  </section>
+  <section id="results" class="hidden">
+    <div class="card"><h2>Campaign</h2><p id="campaignId"></p><div id="agentStatus" class="status"></div></div>
+    <div class="grid">
+      <article class="card"><h2>Brand Intelligence</h2><div id="brand" class="result"></div></article>
+      <article class="card"><h2>Campaign Strategy</h2><div id="strategy" class="result"></div></article>
+      <article class="card"><h2>Critic Evaluation</h2><div id="critic" class="result"></div></article>
+    </div>
+    <div class="card"><h2>Generated Creative</h2><div id="assets" class="grid"></div></div>
+  </section>
+</main>
+<script>
+const $=id=>document.getElementById(id); const stages=['Person 1 · Brand Intelligence','Person 2 · Creative Director','Person 3 · Creative Generator','Person 4 · Critic & Optimizer'];
+function showStages(active){$('progress').innerHTML=stages.map((s,i)=>`<span class="badge">${i===active?'Running: ':''}${s}</span>`).join('')}
+function json(target,value){$(target).textContent=JSON.stringify(value,null,2)}
+$('run').onclick=async()=>{
+ const prompt=$('prompt').value.trim(); if(prompt.length<20){$('error').textContent='Please enter a fuller brand prompt.';return}
+ $('run').disabled=true;$('error').textContent='';$('results').classList.add('hidden');$('message').textContent='Starting connected four-agent campaign workflow…';showStages(0);
+ let tick=0;const timer=setInterval(()=>{tick=Math.min(3,tick+1);showStages(tick)},1600);
+ try{const r=await fetch('/api/v1/workflow/run-from-prompt',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt,generate_poster:$('poster').checked,max_revisions:1})});const data=await r.json();if(!r.ok)throw new Error(typeof data.detail==='string'?data.detail:JSON.stringify(data.detail));
+  clearInterval(timer);$('message').textContent=`Complete: ${data.final_status}`;$('campaignId').textContent=`Campaign ID: ${data.campaign_id}`;$('agentStatus').innerHTML=data.agent_statuses.map(s=>`<span class="badge">${s.agent}: ${s.status}</span>`).join('');
+  json('brand',data.brand_intelligence);json('strategy',data.campaign_handoff.campaign_strategy);json('critic',{evaluations:data.evaluations,revision_feedback:data.revision_feedback,final_status:data.final_status});
+  $('assets').innerHTML=data.creative_assets.map(a=>`<article><h3>Creative ${a.revision_number+1}</h3><div class="result">${a.text.replaceAll('<','&lt;')}</div>${a.image_url?`<h4>Generated image</h4><img src="${a.image_url}" alt="Generated campaign visual">`:''}${a.poster_url?`<h4>Generated poster</h4><img src="${a.poster_url}" alt="Generated campaign poster">`:''}</article>`).join('');$('results').classList.remove('hidden');
+ }catch(e){clearInterval(timer);$('message').textContent='Workflow failed.';$('error').textContent=e.message}finally{$('run').disabled=false}
+};
+</script></body></html>

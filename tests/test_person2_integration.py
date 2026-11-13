@@ -18,6 +18,8 @@ from app.schemas.campaign_schema import CampaignInput
 from app.services.langgraph_creative_director import autonomous_creative_director
 from app.core.config import settings
 
+pytestmark = pytest.mark.integration
+
 
 @pytest.fixture(autouse=True)
 def isolate_integration_outputs(tmp_path, monkeypatch):
