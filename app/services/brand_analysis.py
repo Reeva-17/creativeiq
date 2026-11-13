@@ -25,7 +25,7 @@ class BrandAnalysisService:
         visual = VisualIdentity()
         try:
             raw = await self.provider.generate_json(self._prompt(brand))
-            ai_dna = BrandDNA.model_validate(raw.get("brand_dna", {}))
+            ai_dna = BrandDNA.model_validate(self._normalise_dna(raw.get("brand_dna", {})))
             ai_visual = VisualIdentity.model_validate(raw.get("visual_identity", {}))
             # The prompt requires provenance, so validation protects the contract.
             dna = ai_dna.model_copy(update={"identity": identity + ai_dna.identity, "values": values + ai_dna.values, "positioning": positioning or ai_dna.positioning, "target_audience": dna.target_audience if demographics else ai_dna.target_audience})
@@ -33,6 +33,26 @@ class BrandAnalysisService:
         except (ProviderUnavailableError, ProviderResponseError, ValueError) as exc:
             assumptions.append(f"AI enrichment unavailable: {exc}")
         return dna, visual, assumptions
+
+    @staticmethod
+    def _normalise_dna(value: object) -> dict:
+        """Accept a common provider variation without fabricating analytical data.
+
+        The contract requires ``brand_dna`` to be an object. Some LLM responses
+        return the otherwise-valid list of Finding objects directly. In that
+        case those findings unambiguously describe identity, so retain them
+        under ``identity`` rather than discarding the whole enrichment result.
+        All other invalid shapes continue to fail validation and are reported in
+        the response assumptions.
+        """
+        if isinstance(value, dict):
+            return value
+        if isinstance(value, list) and all(
+            isinstance(item, dict) and "statement" in item and "evidence_type" in item
+            for item in value
+        ):
+            return {"identity": value}
+        return value  # Pydantic supplies the transparent validation error.
 
     def _prompt(self, brand: BrandInput) -> str:
         return "Analyze this brand. Return {brand_dna: ..., visual_identity: ...}; every Finding needs statement and evidence_type. Input: " + brand.model_dump_json()

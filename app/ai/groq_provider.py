@@ -2,8 +2,6 @@ import asyncio
 import json
 from typing import Any
 
-from groq import AsyncGroq
-
 from app.ai.provider import LLMProvider
 from app.core.exceptions import ProviderResponseError, ProviderUnavailableError
 
@@ -13,8 +11,17 @@ class GroqProvider(LLMProvider):
 
     def __init__(self, api_key: str | None, model: str, timeout: float = 20, retries: int = 2, client: Any | None = None):
         self.api_key, self.model, self.timeout, self.retries = api_key, model, timeout, retries
-        # Disable SDK retries so that the application's retry policy is predictable and testable.
-        self.client = client or (AsyncGroq(api_key=api_key, timeout=timeout, max_retries=0) if api_key else None)
+        # Import and construct the network SDK only when an actual Groq request is
+        # possible.  This keeps API schema and offline tests independent of the
+        # provider's HTTP stack, without changing live-provider behaviour.
+        self.client = client or self._create_client()
+
+    def _create_client(self) -> Any | None:
+        if not self.api_key:
+            return None
+        from groq import AsyncGroq
+        # Disable SDK retries so the application's retry policy is predictable.
+        return AsyncGroq(api_key=self.api_key, timeout=self.timeout, max_retries=0)
 
     async def generate_json(self, prompt: str) -> dict[str, Any]:
         if not self.api_key or not self.client:

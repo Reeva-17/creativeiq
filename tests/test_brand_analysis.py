@@ -12,6 +12,19 @@ class BrokenProvider(LLMProvider):
     async def generate_json(self, prompt): raise ProviderResponseError("malformed JSON")
 
 
+class ListDNAProvider(LLMProvider):
+    async def generate_json(self, prompt):
+        return {
+            "brand_dna": [
+                {
+                    "statement": "Approachable and educational.",
+                    "evidence_type": "ai_generated_interpretation",
+                }
+            ],
+            "visual_identity": {},
+        }
+
+
 @pytest.mark.asyncio
 async def test_failed_llm_is_reported_not_faked():
     dna, visual, assumptions = await BrandAnalysisService(BrokenProvider()).analyze(BrandInput(brand_name="Glowify", industry="Skincare"))
@@ -25,3 +38,12 @@ async def test_end_to_end_no_key_provider():
     report = await ReportGenerator(BrandAnalysisService(GroqProvider(None, "test")), CompetitorResearchService(), SWOTService()).complete(BrandInput(brand_name="Glowify", industry="Skincare"))
     assert report.brand_name == "Glowify"
     assert report.competitor_analysis.limitations
+
+
+@pytest.mark.asyncio
+async def test_list_shaped_provider_dna_is_preserved_as_identity():
+    dna, _, assumptions = await BrandAnalysisService(ListDNAProvider()).analyze(
+        BrandInput(brand_name="Glowify", industry="Skincare", business_description="Gentle skincare")
+    )
+    assert any(item.statement == "Approachable and educational." for item in dna.identity)
+    assert not assumptions
