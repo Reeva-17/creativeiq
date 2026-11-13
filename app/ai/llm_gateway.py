@@ -89,8 +89,15 @@ class LLMGateway:
             except Exception as e:
                 print(f"[LLMGateway] Gemini init notice: {e}")
 
-    def generate(self, prompt: str, system_prompt: Optional[str] = None) -> str:
+    def generate(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        max_tokens: int = 4096,
+    ) -> str:
         """Generate response with provider fallback."""
+        if not 1 <= max_tokens <= 8192:
+            raise ValueError("max_tokens must be between 1 and 8192.")
         providers = ["groq", "gemini"] if self.preferred_provider == "groq" else ["gemini", "groq"]
         last_exception = None
 
@@ -106,7 +113,7 @@ class LLMGateway:
                         model=self.groq_model,
                         messages=messages,
                         temperature=0.7,
-                        max_tokens=4096,
+                        max_tokens=max_tokens,
                     )
                     content = completion.choices[0].message.content
                     if content and content.strip():
@@ -118,9 +125,14 @@ class LLMGateway:
             elif provider == "gemini" and self.gemini_client:
                 try:
                     full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
+                    from google.genai import types
+
                     response = self.gemini_client.models.generate_content(
                         model=self.gemini_model,
-                        contents=full_prompt
+                        contents=full_prompt,
+                        config=types.GenerateContentConfig(
+                            max_output_tokens=max_tokens
+                        ),
                     )
                     if response.text and response.text.strip():
                         return response.text

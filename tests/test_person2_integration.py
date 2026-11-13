@@ -2,6 +2,7 @@ import sys
 import os
 import json
 from pathlib import Path
+import pytest
 
 # Ensure UTF-8 output on Windows console
 if sys.stdout.encoding != 'utf-8':
@@ -15,6 +16,12 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.schemas.campaign_schema import CampaignInput
 from app.services.langgraph_creative_director import autonomous_creative_director
+from app.core.config import settings
+
+
+@pytest.fixture(autouse=True)
+def isolate_integration_outputs(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "output_dir", tmp_path)
 
 
 def test_glowify_person1_integration():
