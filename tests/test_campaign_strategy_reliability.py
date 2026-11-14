@@ -110,7 +110,7 @@ def test_valid_json_strategy_is_validated():
     assert result.selected_concept_id == "CONCEPT_2"
     assert len(result.platform_strategy.stories.frames) == 3
     assert len(gateway.prompts) == 1
-    assert gateway.output_budgets == [8192]
+    assert gateway.output_budgets == [4096]
 
 
 def test_fenced_prefaced_nested_strategy_json_is_supported():

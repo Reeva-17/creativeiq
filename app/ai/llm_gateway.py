@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import time
 from typing import Any, Optional
 from dotenv import load_dotenv
 
@@ -82,9 +83,10 @@ class LLMGateway:
         if self.gemini_api_key:
             try:
                 from google import genai
+                timeout_ms = int(float(os.getenv("GEMINI_GATEWAY_TIMEOUT_SECONDS", "120")) * 1000)
                 self.gemini_client = genai.Client(
                     api_key=self.gemini_api_key.strip(),
-                    http_options={"timeout": 60000}
+                    http_options={"timeout": timeout_ms}
                 )
             except Exception as e:
                 print(f"[LLMGateway] Gemini init notice: {e}")
@@ -101,48 +103,70 @@ class LLMGateway:
         providers = ["groq", "gemini"] if self.preferred_provider == "groq" else ["gemini", "groq"]
         last_exception = None
 
+        # A campaign workflow makes several independent model calls.  Keep
+        # retries bounded, but retry temporary provider congestion before
+        # abandoning the workflow for the secondary provider.
+        provider_attempts = max(1, int(os.getenv("LLM_PROVIDER_MAX_RETRIES", "2")))
+
         for provider in providers:
             if provider == "groq" and self.groq_client:
-                try:
-                    messages = []
-                    if system_prompt:
-                        messages.append({"role": "system", "content": system_prompt})
-                    messages.append({"role": "user", "content": prompt})
+                for attempt in range(provider_attempts):
+                    try:
+                        messages = []
+                        if system_prompt:
+                            messages.append({"role": "system", "content": system_prompt})
+                        messages.append({"role": "user", "content": prompt})
 
-                    completion = self.groq_client.chat.completions.create(
-                        model=self.groq_model,
-                        messages=messages,
-                        temperature=0.7,
-                        max_tokens=max_tokens,
-                    )
-                    content = completion.choices[0].message.content
-                    if content and content.strip():
-                        return content
-                except Exception as exc:
-                    print(f"[LLMGateway] Groq ({self.groq_model}) encountered: {exc}. Trying fallback...")
-                    last_exception = exc
+                        completion = self.groq_client.chat.completions.create(
+                            model=self.groq_model,
+                            messages=messages,
+                            temperature=0.7,
+                            max_tokens=max_tokens,
+                        )
+                        content = completion.choices[0].message.content
+                        if content and content.strip():
+                            return content
+                        raise RuntimeError("Groq returned an empty response")
+                    except Exception as exc:
+                        last_exception = exc
+                        if attempt + 1 < provider_attempts:
+                            print(f"[LLMGateway] Groq temporary failure; retrying ({attempt + 1}/{provider_attempts}): {exc}")
+                            time.sleep(2 ** attempt)
+                        else:
+                            print(f"[LLMGateway] Groq ({self.groq_model}) encountered: {exc}. Trying fallback...")
 
             elif provider == "gemini" and self.gemini_client:
-                try:
-                    full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
-                    from google.genai import types
+                for attempt in range(provider_attempts):
+                    try:
+                        full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
+                        from google.genai import types
 
-                    response = self.gemini_client.models.generate_content(
-                        model=self.gemini_model,
-                        contents=full_prompt,
-                        config=types.GenerateContentConfig(
-                            max_output_tokens=max_tokens
-                        ),
-                    )
-                    if response.text and response.text.strip():
-                        return response.text
-                except Exception as exc:
-                    print(f"[LLMGateway] Gemini ({self.gemini_model}) encountered: {exc}.")
-                    last_exception = exc
+                        response = self.gemini_client.models.generate_content(
+                            model=self.gemini_model,
+                            contents=full_prompt,
+                            config=types.GenerateContentConfig(
+                                max_output_tokens=max_tokens
+                            ),
+                        )
+                        if response.text and response.text.strip():
+                            return response.text
+                        raise RuntimeError("Gemini returned an empty response")
+                    except Exception as exc:
+                        last_exception = exc
+                        if attempt + 1 < provider_attempts:
+                            print(f"[LLMGateway] Gemini temporary failure; retrying ({attempt + 1}/{provider_attempts}): {exc}")
+                            time.sleep(2 ** attempt)
+                        else:
+                            print(f"[LLMGateway] Gemini ({self.gemini_model}) encountered: {exc}.")
 
         raise RuntimeError(f"All LLM providers failed. Last error: {last_exception}")
 
-    def generate_json(self, prompt: str, system_prompt: Optional[str] = None) -> dict[str, Any]:
+    def generate_json(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        max_tokens: int = 2048,
+    ) -> dict[str, Any]:
         """Generate and parse structured JSON with repair logic."""
         json_sys_prompt = (
             "You are an expert AI Creative Director. "
@@ -152,7 +176,9 @@ class LLMGateway:
         if system_prompt:
             json_sys_prompt = f"{system_prompt}\n\n{json_sys_prompt}"
 
-        raw_output = self.generate(prompt, system_prompt=json_sys_prompt)
+        raw_output = self.generate(
+            prompt, system_prompt=json_sys_prompt, max_tokens=max_tokens
+        )
         cleaned = clean_json_string(raw_output)
 
         try:
@@ -161,7 +187,11 @@ class LLMGateway:
             # Attempt one repair pass
             print(f"[LLMGateway] JSON decode error: {exc}. Attempting repair pass...")
             repair_prompt = f"The following string is supposed to be valid JSON, but has a syntax error:\n{cleaned}\n\nFix the syntax and return ONLY valid JSON:"
-            repaired = self.generate(repair_prompt, system_prompt="You are a JSON syntax repair specialist. Return ONLY valid raw JSON.")
+            repaired = self.generate(
+                repair_prompt,
+                system_prompt="You are a JSON syntax repair specialist. Return ONLY valid raw JSON.",
+                max_tokens=max_tokens,
+            )
             repaired_clean = clean_json_string(repaired)
             return json.loads(repaired_clean)
 

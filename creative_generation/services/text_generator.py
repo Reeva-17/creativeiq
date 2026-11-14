@@ -70,6 +70,20 @@ def generate_marketing_text(campaign_brief):
         if attempt < max_retries:
             time.sleep(2 ** attempt)
 
-    raise TextGenerationError(
-        f"Person 3 text generation failed after {max_retries + 1} attempts: {last_error}"
-    )
+    # Gemini can be temporarily quota-limited or congested.  Use the existing
+    # configured Groq integration for genuine AI copy before failing a campaign;
+    # never substitute fixed/template marketing output.
+    try:
+        from app.ai.llm_gateway import LLMGateway
+
+        groq_gateway = LLMGateway(preferred_provider="groq")
+        return groq_gateway.generate(
+            prompt,
+            system_prompt="You are an expert marketing copywriter. Return polished campaign copy only.",
+            max_tokens=1200,
+        )
+    except Exception as fallback_exc:
+        raise TextGenerationError(
+            "Person 3 text generation failed through Gemini and Groq. "
+            f"Gemini: {last_error}; Groq: {fallback_exc}"
+        ) from fallback_exc

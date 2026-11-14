@@ -15,5 +15,6 @@ Return JSON matching this structure only:
 }}
 User request:\n{prompt}""",
         system_prompt="You are a precise brand-intake assistant. Return only valid JSON.",
+        max_tokens=1200,
     )
     return BrandInput.model_validate(response)

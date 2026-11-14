@@ -25,7 +25,9 @@ class CampaignStrategySynthesizer:
         self.gateway = gateway or llm_gateway
 
     MAX_ATTEMPTS = 2
-    MAX_OUTPUT_TOKENS = 8192
+    # The schema is detailed, but 4k is ample and avoids requesting more than
+    # the free-tier provider's available burst budget in one strategy call.
+    MAX_OUTPUT_TOKENS = 4096
 
     @staticmethod
     def _parse_json_object(raw_response: str) -> Dict[str, Any]:

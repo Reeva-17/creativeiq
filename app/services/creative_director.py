@@ -95,7 +95,9 @@ Return your output as a JSON object with this exact structure:
   ]
 }}
 """
-        response_dict = self.gateway.generate_json(prompt, system_prompt=system_prompt)
+        response_dict = self.gateway.generate_json(
+            prompt, system_prompt=system_prompt, max_tokens=2200
+        )
         raw_concepts = response_dict.get("concepts", [])
 
         if len(raw_concepts) != 3:
