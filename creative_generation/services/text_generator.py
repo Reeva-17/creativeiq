@@ -1,61 +1,75 @@
 
+"""Gemini-backed copy generation for Person 3."""
 import os
+import time
+
 import requests
 from dotenv import load_dotenv
 
 load_dotenv()
 
-API_KEY = os.getenv("GEMINI_API_KEY")
+DEFAULT_MODEL = "gemini-2.5-flash"
 
-MODEL = "gemini-3.6-flash"
+
+class TextGenerationError(RuntimeError):
+    """A safe, actionable Person 3 provider failure."""
+
+
+def _provider_error(response):
+    try:
+        error = response.json().get("error", {})
+        return str(error.get("message") or error)
+    except ValueError:
+        return response.text[:500] or response.reason
+
 
 def generate_marketing_text(campaign_brief):
+    """Generate copy, retrying transient timeout, rate-limit, and 5xx errors."""
+    api_key = os.getenv("GEMINI_API_KEY")
+    model = os.getenv("GEMINI_MODEL", DEFAULT_MODEL)
+    timeout_seconds = float(os.getenv("GEMINI_TIMEOUT_SECONDS", "90"))
+    max_retries = int(os.getenv("GEMINI_MAX_RETRIES", "2"))
+    if not api_key:
+        raise TextGenerationError("GEMINI_API_KEY is missing from the environment")
 
-    if not API_KEY:
-        raise ValueError("Gemini API key not found in .env")
-
-    url = (
-        f"https://generativelanguage.googleapis.com/"
-        f"v1beta/models/{MODEL}:generateContent"
+    prompt = (
+        "You are an expert marketing copywriter. Create marketing content for this campaign:\n\n"
+        + campaign_brief
+        + "\n\nGenerate three catchy headlines, one Instagram caption, one brand tagline, "
+        "five relevant hashtags, and one call-to-action. Keep it creative, engaging, and brand-appropriate."
     )
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    payload = {"contents": [{"parts": [{"text": prompt}]}]}
+    last_error = "unknown error"
 
-    prompt = f"""
-    You are an expert marketing copywriter.
+    for attempt in range(max_retries + 1):
+        try:
+            response = requests.post(
+                url,
+                headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
+                json=payload,
+                timeout=timeout_seconds,
+            )
+            if response.ok:
+                try:
+                    text = response.json()["candidates"][0]["content"]["parts"][0]["text"]
+                except (KeyError, IndexError, TypeError, ValueError) as exc:
+                    raise TextGenerationError("Gemini returned no usable marketing text") from exc
+                if isinstance(text, str) and text.strip():
+                    return text
+                raise TextGenerationError("Gemini returned empty marketing text")
 
-    Create marketing content for this campaign:
+            last_error = f"Gemini returned HTTP {response.status_code}: {_provider_error(response)}"
+            if response.status_code != 429 and response.status_code < 500:
+                raise TextGenerationError(last_error)
+        except requests.Timeout:
+            last_error = f"Gemini timed out after {timeout_seconds:g} seconds"
+        except requests.RequestException as exc:
+            last_error = f"Gemini network request failed: {exc}"
 
-    {campaign_brief}
+        if attempt < max_retries:
+            time.sleep(2 ** attempt)
 
-    Generate:
-    1. Three catchy headlines
-    2. One Instagram caption
-    3. One brand tagline
-    4. Five relevant hashtags
-    5. One call-to-action
-
-    Make the content creative, engaging and brand-appropriate.
-    """
-
-    response = requests.post(
-        url,
-        headers={
-            "x-goog-api-key": API_KEY,
-            "Content-Type": "application/json"
-        },
-        json={
-            "contents": [
-                {
-                    "parts": [
-                        {"text": prompt}
-                    ]
-                }
-            ]
-        },
-        timeout=60
+    raise TextGenerationError(
+        f"Person 3 text generation failed after {max_retries + 1} attempts: {last_error}"
     )
-
-    response.raise_for_status()
-
-    data = response.json()
-
-    return data["candidates"][0]["content"]["parts"][0]["text"]
