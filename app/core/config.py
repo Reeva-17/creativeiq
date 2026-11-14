@@ -20,7 +20,7 @@ class Settings(BaseSettings):
 
     # Gemini Settings (Fallback / Alternative Provider)
     gemini_api_key: str | None = Field(default=None, validation_alias="GEMINI_API_KEY")
-    gemini_model: str = Field(default="gemini-2.5-flash", validation_alias="GEMINI_MODEL")
+    gemini_model: str = Field(default="gemini-3.8-flash", validation_alias="GEMINI_MODEL")
 
     # Optional Cloudflare Workers AI image generation (Person 3).
     cloudflare_account_id: str | None = Field(default=None, validation_alias="CLOUDFLARE_ACCOUNT_ID")

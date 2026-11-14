@@ -37,7 +37,7 @@ Set these values in `.env`; never commit it:
 ```env
 GROQ_API_KEY=your_groq_key
 GEMINI_API_KEY=your_gemini_key
-GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MODEL=gemini-3.8-flash
 # Optional: public competitor research
 TAVILY_API_KEY=your_tavily_key
 # Optional: images when generate_image is true

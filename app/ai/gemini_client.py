@@ -9,7 +9,7 @@ load_dotenv()
 class GeminiClient:
     def __init__(self):
         self.api_key = os.getenv("GEMINI_API_KEY")
-        self.model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+        self.model = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
         self.client = None
 
     def _get_client(self):

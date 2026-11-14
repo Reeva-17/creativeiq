@@ -10,7 +10,7 @@ ROOT_DIR = os.path.dirname(
 load_dotenv(os.path.join(ROOT_DIR, ".env"))
 
 API_KEY = os.getenv("GEMINI_API_KEY")
-MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
 
 
 def get_gemini_client():
