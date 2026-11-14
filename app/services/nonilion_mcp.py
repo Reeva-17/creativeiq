@@ -33,6 +33,17 @@ class NonilionMCPClient:
             "params": {"name": name, "arguments": arguments or {}},
         }
         try:
+            # `listen` is a documented long-poll (up to 25 seconds).  Its
+            # HTTP read timeout must leave enough room for network latency and
+            # the server response, otherwise an idle room looks like a failed
+            # MCP connection.
+            wait_seconds = int((arguments or {}).get("wait_seconds", 0))
+            timeout = httpx.Timeout(
+                connect=15.0,
+                read=max(45.0, wait_seconds + 30.0),
+                write=15.0,
+                pool=15.0,
+            )
             response = httpx.post(
                 self.endpoint,
                 headers={
@@ -40,7 +51,7 @@ class NonilionMCPClient:
                     "Content-Type": "application/json",
                 },
                 json=payload,
-                timeout=30,
+                timeout=timeout,
             )
         except httpx.HTTPError as exc:
             raise NonilionMCPError(f"Could not reach Nonilion MCP: {exc}") from exc
