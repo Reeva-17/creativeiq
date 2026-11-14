@@ -96,16 +96,30 @@ Return your output as a JSON object with this exact structure:
 }}
 """
         response_dict = self.gateway.generate_json(
-            prompt, system_prompt=system_prompt, max_tokens=2200
+            prompt, system_prompt=system_prompt, max_tokens=2600
         )
         raw_concepts = response_dict.get("concepts", [])
 
+        # Providers occasionally return an incomplete JSON list under load.
+        # Ask the real model once more with an explicit correction rather than
+        # inventing concepts or terminating the complete campaign prematurely.
+        if len(raw_concepts) < 3:
+            correction = (
+                "\n\nCORRECTION: Your previous response did not contain exactly three "
+                "concept objects. Return the complete JSON object again with exactly "
+                "three distinct entries in `concepts`, CONCEPT_1 through CONCEPT_3. "
+                "Keep every field concise but non-empty."
+            )
+            response_dict = self.gateway.generate_json(
+                prompt + correction, system_prompt=system_prompt, max_tokens=3200
+            )
+            raw_concepts = response_dict.get("concepts", [])
+
         if len(raw_concepts) != 3:
-            # If not exactly 3, attempt slicing or fallback
             if len(raw_concepts) > 3:
                 raw_concepts = raw_concepts[:3]
             else:
-                raise ValueError(f"Expected 3 concepts from LLM, received {len(raw_concepts)}")
+                raise ValueError(f"Expected 3 concepts from LLM after retry, received {len(raw_concepts)}")
 
         validated_concepts: List[CampaignConcept] = []
         for idx, c_data in enumerate(raw_concepts, start=1):
