@@ -96,6 +96,7 @@ class LLMGateway:
         prompt: str,
         system_prompt: Optional[str] = None,
         max_tokens: int = 4096,
+        json_mode: bool = False,
     ) -> str:
         """Generate response with provider fallback."""
         if not 1 <= max_tokens <= 8192:
@@ -117,12 +118,15 @@ class LLMGateway:
                             messages.append({"role": "system", "content": system_prompt})
                         messages.append({"role": "user", "content": prompt})
 
-                        completion = self.groq_client.chat.completions.create(
-                            model=self.groq_model,
-                            messages=messages,
-                            temperature=0.7,
-                            max_tokens=max_tokens,
-                        )
+                        request_options = {
+                            "model": self.groq_model,
+                            "messages": messages,
+                            "temperature": 0.7,
+                            "max_tokens": max_tokens,
+                        }
+                        if json_mode:
+                            request_options["response_format"] = {"type": "json_object"}
+                        completion = self.groq_client.chat.completions.create(**request_options)
                         content = completion.choices[0].message.content
                         if content and content.strip():
                             return content
@@ -141,12 +145,13 @@ class LLMGateway:
                         full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
                         from google.genai import types
 
+                        config_options = {"max_output_tokens": max_tokens}
+                        if json_mode:
+                            config_options["response_mime_type"] = "application/json"
                         response = self.gemini_client.models.generate_content(
                             model=self.gemini_model,
                             contents=full_prompt,
-                            config=types.GenerateContentConfig(
-                                max_output_tokens=max_tokens
-                            ),
+                            config=types.GenerateContentConfig(**config_options),
                         )
                         if response.text and response.text.strip():
                             return response.text
@@ -177,7 +182,8 @@ class LLMGateway:
             json_sys_prompt = f"{system_prompt}\n\n{json_sys_prompt}"
 
         raw_output = self.generate(
-            prompt, system_prompt=json_sys_prompt, max_tokens=max_tokens
+            prompt, system_prompt=json_sys_prompt, max_tokens=max_tokens,
+            json_mode=True,
         )
         cleaned = clean_json_string(raw_output)
 
@@ -191,6 +197,7 @@ class LLMGateway:
                 repair_prompt,
                 system_prompt="You are a JSON syntax repair specialist. Return ONLY valid raw JSON.",
                 max_tokens=max_tokens,
+                json_mode=True,
             )
             repaired_clean = clean_json_string(repaired)
             return json.loads(repaired_clean)
